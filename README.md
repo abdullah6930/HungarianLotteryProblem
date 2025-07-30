@@ -79,19 +79,7 @@ HungarianLotteryProblem/
 └── README.md               # This file
 ```
 
-## ✨ Features
-
-- **Segmented Parallel File Processing**: Revolutionary approach eliminating I/O bottlenecks
-- **True Parallel I/O**: Each thread has independent file access for maximum throughput
-- **Smart Line Boundary Handling**: Zero data loss with careful segment boundary management
-- **Parallel Match Counting**: Multi-threaded result computation for optimal performance
-- **Input Validation**: Validates player numbers (1-90, exactly 5 numbers per player)
-- **Error Handling**: Robust error handling for file operations and user input
-- **Memory Efficient**: Segmented processing with optimized memory allocation
-- **Hardware Optimization**: Automatic CPU core detection and threading recommendations
-- **Cross-platform**: Works on Windows, macOS, and Linux
-
-## 🚀 Run Instructions
+## Run Instructions
 
 ### Quick Start
 ```bash
@@ -144,14 +132,3 @@ If the specified file doesn't exist, the program automatically generates 1,000,0
 # This will create test_players.txt with 1M random entries
 go run main.go test_players.txt 12
 ```
-
-## 🏆 Algorithm Innovation
-
-This implementation represents a significant advancement in parallel file processing:
-
-- **Eliminates Single-Point Bottlenecks**: Traditional producer-consumer patterns create I/O bottlenecks
-- **True Parallel I/O**: Each thread directly accesses the file system independently  
-- **Optimal Resource Utilization**: Scales with both CPU cores and storage parallelism
-- **Zero Data Loss**: Sophisticated line boundary handling ensures perfect data integrity
-
-The segmented approach achieves **10.4M entries/second** reading performance, demonstrating the effectiveness of eliminating sequential file access patterns in favor of true parallel I/O operations.
