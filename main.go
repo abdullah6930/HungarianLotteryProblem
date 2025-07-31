@@ -220,12 +220,30 @@ func readFileSegment(file *os.File, threadID int, startPos, endPos int64, optima
 		}
 	}
 
+	nums := make([]string, 5)
+	var picks []int
+	var n int
+	var line string
+
 	// Read and process complete lines within our segment
 	for scanner.Scan() {
-		line := scanner.Text()
+		line = scanner.Text()
 		lineCount++
 
-		picks, err := parseLine(line)
+		nums = nums[:0]
+		nums = strings.Fields(line)
+		if len(nums) != 5 {
+			nums = nil
+		}
+		
+		for _, s := range nums {
+			n, err = strconv.Atoi(s)
+			if err != nil {
+				return nil, fmt.Errorf("invalid number: %v", s)
+			}
+			picks = append(picks, n)
+		}
+
 		if err != nil {
 			// Log error but continue processing
 			fmt.Printf("Thread %d: error parsing line %d: %v\n", threadID, lineCount, err)
@@ -236,16 +254,30 @@ func readFileSegment(file *os.File, threadID int, startPos, endPos int64, optima
 		}
 	}
 
+
 	// Check if we need to read one more complete line (if we ended mid-line)
 	if limitedReader.N == 0 {
 		// We've reached our limit, but might be in the middle of a line
 		// Read until the end of the current line
 		originalScanner := bufio.NewScanner(file)
 		if originalScanner.Scan() {
-			line := originalScanner.Text()
+			line = originalScanner.Text()
 			lineCount++
 
-			picks, err := parseLine(line)
+			nums = nums[:0]
+			nums = strings.Fields(line)
+			if len(nums) != 5 {
+				nums = nil
+			}
+			
+			for _, s := range nums {
+				n, err = strconv.Atoi(s)
+				if err != nil {
+					return nil, fmt.Errorf("invalid number: %v", s)
+				}
+				picks = append(picks, n)
+			}
+
 			if err != nil {
 				fmt.Printf("Thread %d: error parsing final line %d: %v\n", threadID, lineCount, err)
 			} else if picks != nil {
@@ -278,24 +310,6 @@ func nextPowerOf2(n int64) int {
 		}
 	}
 	return power
-}
-
-// Helper function to parse a single line
-func parseLine(line string) ([]int, error) {
-	nums := strings.Fields(line)
-	if len(nums) != 5 {
-		return nil, nil // Skip invalid lines
-	}
-	
-	var picks []int
-	for _, s := range nums {
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			return nil, fmt.Errorf("invalid number: %v", s)
-		}
-		picks = append(picks, n)
-	}
-	return picks, nil
 }
 
 // Parallel match counting for maximum performance
