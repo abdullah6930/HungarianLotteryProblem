@@ -25,7 +25,8 @@ func main() {
 		min, max := 1, 90
 
 		// Open file in append mode, create if it doesn't exist
-		file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+
 		if err != nil {
 			fmt.Println("Error opening file:", err)
 			return
@@ -35,13 +36,14 @@ func main() {
 		rand.Seed(time.Now().UnixNano())
 
 		// get line count from file
-		lineCount, err = getLineCount(file)
+		var i int
+		i, err = getLineCount(file)
 		if err != nil {
 			fmt.Println("Error getting line count:", err)
 			return
 		}
 
-		for i := 0; i < lineCount; i++ {
+		for i < lineCount {
 			line := ""
 			for j := 0; j < numsPerLine; j++ {
 				n := rand.Intn(max-min+1) + min
@@ -55,6 +57,7 @@ func main() {
 				fmt.Println("Error writing to file:", err)
 				return
 			}
+			i++
 		}
 
 		fmt.Println("Appended", lineCount, "lines to", fileName)
