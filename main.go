@@ -34,6 +34,13 @@ func main() {
 
 		rand.Seed(time.Now().UnixNano())
 
+		// get line count from file
+		lineCount, err = getLineCount(file)
+		if err != nil {
+			fmt.Println("Error getting line count:", err)
+			return
+		}
+
 		for i := 0; i < lineCount; i++ {
 			line := ""
 			for j := 0; j < numsPerLine; j++ {
@@ -409,4 +416,24 @@ func countMatches(player []int, winning []int, set map[int]bool, match int, n in
 		}
 	}
 	return match
+}
+
+func getLineCount(file *os.File) (int, error) {
+	// Reset file pointer to beginning
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return 0, err
+	}
+
+	scanner := bufio.NewScanner(file)
+	lineCount := 0
+
+	for scanner.Scan() {
+		lineCount++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+
+	return lineCount, nil
 }
