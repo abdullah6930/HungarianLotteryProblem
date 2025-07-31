@@ -61,23 +61,36 @@ func main() {
 	}
 
 	// Read players from file
-	threads, err := strconv.Atoi(os.Args[2])
+	threadsInt, err := strconv.Atoi(os.Args[2])
 	if err != nil {
 		fmt.Println("Error converting threads count to integer:", err)
 		return
 	}
-
-	// Performance tip for optimal threading
-	cpuCores := runtime.NumCPU()
-	if threads > cpuCores*2 {
-		fmt.Printf("Warning: Using %d threads with only %d CPU cores may cause overhead.\n", threads, cpuCores)
+	
+	// Convert to byte (max 256 threads)
+	if threadsInt > 255 {
+		fmt.Println("Warning: Thread count capped at 255")
+		threadsInt = 255
 	}
-	if threads < cpuCores && cpuCores <= 16 {
+	threads := byte(threadsInt)
+
+	cores := runtime.NumCPU()
+	if cores > 255 {
+		cores = 255
+	}
+	cpuCores := byte(cores)
+
+	fmt.Println("CPU cores:", cpuCores)
+	if threads > cpuCores {
+		fmt.Printf("Warning: Using %d threads with only %d CPU cores may cause overhead.\n", threadsInt, cpuCores)
+	}
+	if threads < cpuCores {
 		fmt.Printf("Tip: Consider using %d threads to match your CPU cores for optimal performance.\n", cpuCores)
 	}
 	
 	fmt.Println("Reading players from file...")
 	fmt.Println("Threads:", threads)
+	
 	start := time.Now()
 	players, err := readPlayers(os.Args[1], threads)
 	elapsed := time.Since(start)
@@ -107,7 +120,7 @@ func main() {
 	fmt.Printf("Counting matches Execution took %s (%d ns)\n", elapsed, elapsed.Nanoseconds())
 }
 
-func readPlayers(path string, threads int) ([][]int, error) {
+func readPlayers(path string, threads byte) ([][]int, error) {
 	// Get file size for segment calculation
 	file, err := os.Open(path)
 	if err != nil {
@@ -119,7 +132,7 @@ func readPlayers(path string, threads int) ([][]int, error) {
 		return nil, err
 	}
 	fileSize := fileInfo.Size()
-	file.Close()
+	
 
 	// Calculate segment size per thread
 	segmentSize := fileSize / int64(threads)
@@ -132,10 +145,13 @@ func readPlayers(path string, threads int) ([][]int, error) {
 	resultsChan := make(chan [][]int, threads)
 	var wg sync.WaitGroup
 
+	optimalBufferSize := int(segmentSize) + (int(segmentSize)/2)
+	optimalBufferSize = nextPowerOf2(int64(optimalBufferSize))
+
 	// Launch reader threads - each reads its own file segment
-	for threadID := 0; threadID < threads; threadID++ {
+	for threadID := byte(0); threadID < threads; threadID++ {
 		wg.Add(1)
-		go func(id int) {
+		go func(id byte) {
 			defer wg.Done()
 			
 			// Calculate start and end positions for this thread
@@ -145,8 +161,7 @@ func readPlayers(path string, threads int) ([][]int, error) {
 				endPos = fileSize // Last thread reads until end of file
 			}
 
-			
-			players, err := readFileSegment(path, id, startPos, endPos)
+			players, err := readFileSegment(file, int(id), startPos, endPos, optimalBufferSize)
 			if err != nil {
 				fmt.Printf("Thread %d error: %v\n", id, err)
 				resultsChan <- nil
@@ -161,6 +176,7 @@ func readPlayers(path string, threads int) ([][]int, error) {
 	go func() {
 		wg.Wait()
 		close(resultsChan)
+		file.Close()
 	}()
 
 	// Combine results from all threads
@@ -178,16 +194,9 @@ func readPlayers(path string, threads int) ([][]int, error) {
 }
 
 // readFileSegment reads a specific segment of the file from startPos to endPos
-func readFileSegment(path string, threadID int, startPos, endPos int64) ([][]int, error) {
-	// Each thread opens its own file handle for true parallel I/O
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("thread %d: failed to open file: %v", threadID, err)
-	}
-	defer file.Close()
-
+func readFileSegment(file *os.File, threadID int, startPos, endPos int64, optimalBufferSize int) ([][]int, error) {
 	// Seek to the start position
-	_, err = file.Seek(startPos, 0)
+	_, err := file.Seek(startPos, 0)
 	if err != nil {
 		return nil, fmt.Errorf("thread %d: failed to seek to position %d: %v", threadID, startPos, err)
 	}
@@ -196,9 +205,8 @@ func readFileSegment(path string, threadID int, startPos, endPos int64) ([][]int
 	limitedReader := &io.LimitedReader{R: file, N: endPos - startPos}
 	scanner := bufio.NewScanner(limitedReader)
 
-	// Optimize scanner buffer for large segments
-	buf := make([]byte, 1024*1024) // 1MB buffer
-	scanner.Buffer(buf, 1024*1024)
+	buf := make([]byte, optimalBufferSize)
+	scanner.Buffer(buf, optimalBufferSize)
 
 	var players [][]int
 	lineCount := 0
@@ -253,6 +261,25 @@ func readFileSegment(path string, threadID int, startPos, endPos int64) ([][]int
 	return players, nil
 }
 
+func nextPowerOf2(n int64) int {
+	if n <= 0 {
+		return 1
+	}
+	if n == 1 {
+		return 1
+	}
+	
+	// Find the highest bit set
+	power := 1
+	for power < int(n) {
+		power *= 2
+		if power > 1048576 { // Cap at 1MB
+			return 1048576
+		}
+	}
+	return power
+}
+
 // Helper function to parse a single line
 func parseLine(line string) ([]int, error) {
 	nums := strings.Fields(line)
@@ -272,62 +299,58 @@ func parseLine(line string) ([]int, error) {
 }
 
 // Parallel match counting for maximum performance
-func countMatchesParallel(players [][]int, winning []int, threads int) MatchCount {
+func countMatchesParallel(players [][]int, winning []int, threads byte) MatchCount {
 	if len(players) == 0 {
 		return MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
 	}
-	
-	// Calculate chunk size for optimal load distribution
-	chunkSize := len(players) / threads
+
+	totalPlayers := len(players)
+	chunkSize := totalPlayers / int(threads)
 	if chunkSize == 0 {
 		chunkSize = 1
 	}
-	
-	// Channel to collect results from workers
+
 	resultsChan := make(chan MatchCount, threads)
 	var wg sync.WaitGroup
-	
-	// Launch worker goroutines
-	for i := 0; i < threads; i++ {
+
+	for i := 0; i < int(threads); i++ {
 		start := i * chunkSize
 		end := start + chunkSize
-		if i == threads-1 {
-			end = len(players) // Last worker takes remaining players
+		if i == int(threads)-1 {
+			end = totalPlayers
 		}
-		if start >= len(players) {
+		if start >= totalPlayers {
 			break
 		}
-		
+
 		wg.Add(1)
 		go func(playerChunk [][]int) {
 			defer wg.Done()
 			localResult := MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
-			
+
 			for _, player := range playerChunk {
 				match := countMatches(player, winning)
 				if match >= 2 && match <= 5 {
 					localResult[match]++
 				}
 			}
-			
+
 			resultsChan <- localResult
 		}(players[start:end])
 	}
-	
-	// Close channel when all workers are done
+
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
-	
-	// Aggregate results
+
 	finalResult := MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
 	for localResult := range resultsChan {
 		for k, v := range localResult {
 			finalResult[k] += v
 		}
 	}
-	
+
 	return finalResult
 }
 
