@@ -96,15 +96,15 @@ func main() {
 	elapsed := time.Since(start)
 	fmt.Printf("Reading players Execution took %s (%d ns)\n", elapsed, elapsed.Nanoseconds())
 	
-	start = time.Now()
 	if err != nil {
 		fmt.Println("Error reading player file:", err)
 		return
 	}
-
+	
 	// Get winning numbers
 	winning := getWinningNumbers()
-
+	
+	start = time.Now()
 	// Parallel match counting for maximum speed
 	fmt.Printf("Counting matches with %d threads...\n", threads)
 	result := countMatchesParallel(players, winning, threads)
@@ -236,6 +236,7 @@ func readFileSegment(file *os.File, threadID int, startPos, endPos int64, optima
 			nums = nil
 		}
 		
+		picks = nil
 		for _, s := range nums {
 			n, err = strconv.Atoi(s)
 			if err != nil {
@@ -264,12 +265,12 @@ func readFileSegment(file *os.File, threadID int, startPos, endPos int64, optima
 			line = originalScanner.Text()
 			lineCount++
 
-			nums = nums[:0]
 			nums = strings.Fields(line)
 			if len(nums) != 5 {
 				nums = nil
 			}
 			
+			picks = nil
 			for _, s := range nums {
 				n, err = strconv.Atoi(s)
 				if err != nil {
