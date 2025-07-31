@@ -342,9 +342,12 @@ func countMatchesParallel(players [][]int, winning []int, threads byte) MatchCou
 		go func(playerChunk [][]int) {
 			defer wg.Done()
 			localResult := MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
+			var set map[int]bool
+			var match int
+			var p, n int
 
 			for _, player := range playerChunk {
-				match := countMatches(player, winning)
+				match = countMatches(player, winning, set, match, n, p)
 				if match >= 2 && match <= 5 {
 					localResult[match]++
 				}
@@ -392,13 +395,15 @@ func getWinningNumbers() []int {
 	return win
 }
 
-func countMatches(player []int, winning []int) int {
-	match := 0
-	set := make(map[int]bool)
-	for _, n := range winning {
+func countMatches(player []int, winning []int, set map[int]bool, match int, n int, p int) int {
+	match = 0
+	set = make(map[int]bool)
+	n = 0
+	p = 0
+	for _, n = range winning {
 		set[n] = true
 	}
-	for _, p := range player {
+	for _, p = range player {
 		if set[p] {
 			match++
 		}
