@@ -222,8 +222,30 @@ type EncodedPlayer [5]byte
 //  1+space  4+space  22+space 56+space   89
 ```
 
+### Big O Complexity Analysis
+
+#### Time Complexity
+- **File Reading**: O(n) - Linear with number of players
+- **Player Encoding**: O(n) - O(1) per player × n players
+- **Match Processing**: O(n) - Each player compared against 5 winning numbers (constant)
+- **Result Aggregation**: O(t) - Where t is number of threads (typically << n)
+- **Overall System**: O(n) - Linear scalability with player count
+
+#### Space Complexity
+- **Raw Player Data**: O(n) - 5 bytes per player with custom encoding
+- **Working Memory**: O(n/t) per thread - Segmented processing
+- **Result Storage**: O(1) - Fixed-size match counters
+- **Total Memory**: O(n) - Optimal linear space usage
+
+#### Parallel Processing Complexity
+- **Thread Coordination**: O(t) - Where t = number of threads
+- **File Segmentation**: O(1) - Constant time segment calculation  
+- **Load Balancing**: O(n/t) - Even distribution across threads
+- **Result Merging**: O(t) - Combine results from all threads
+
 ### Performance Characteristics
 - **Encoding**: O(1) per player
 - **Decoding**: O(1) per player (only when needed for matching)
-- **Memory access**: 8x better cache locality
-- **GC pressure**: Minimal due to compact allocations
+- **Cache Efficiency**: 8x better locality due to compact representation
+- **Memory Bandwidth**: Reduced by 87.5% compared to standard integer arrays
+- **GC Pressure**: Minimal due to compact allocations
