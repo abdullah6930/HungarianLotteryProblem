@@ -1,6 +1,6 @@
 # Hungarian Lottery Problem (GoLang)
 
-This project solves the Hungarian Lottery winner reporting problem with **revolutionary memory efficiency** using Go, **segmented parallel file processing**, and **custom bit mapping optimization**.
+This project solves the Hungarian Lottery winner reporting problem with **revolutionary memory efficiency** using Go, **segmented parallel file processing**, and **optimized byte storage**.
 
 ## 📌 Problem Description
 
@@ -9,7 +9,7 @@ In the Hungarian lottery, players select **5 distinct numbers** between **1 and 
 During the weekly draw, the lottery organization selects **5 distinct numbers**. The system must then quickly report how many players matched 2, 3, 4, or all 5 numbers from the pre-loaded player entries (up to 10 million).
 
 ### 🔄 Processing Sequence
-1. **Pre-processing**: Load all player entries into memory with optimized encoding
+1. **Pre-processing**: Load all player entries into memory with optimized storage
 2. **Draw Event**: Lottery organization announces the 5 winning numbers  
 3. **Analysis**: Rapidly compare all players against winning numbers
 4. **Report**: Generate winner statistics in milliseconds
@@ -25,20 +25,19 @@ During the weekly draw, the lottery organization selects **5 distinct numbers**.
 
 ## ⚙️ Revolutionary Optimizations
 
-### 🚀 1. Custom Bit Mapping Memory Optimization
-This implementation uses a **custom bit mapping technique** for ultra-efficient memory usage:
+### 🚀 1. Optimized Byte Storage
+This implementation uses **direct byte storage** for ultra-efficient memory usage:
 
-- **Numbers 1-90**: Stored in 7 bits
-- **Space encoding**: 8th bit indicates if space follows the number  
+- **Numbers 1-90**: Each stored directly in 1 byte (numbers ≤ 255)
+- **No overhead**: Simple, direct storage without bit manipulation
 - **Per player**: 5 bytes total
 - **10M players**: 47.68 MB total memory usage
 
-#### Bit Layout Example
+#### Storage Example
 ```
 Original numbers: 1 4 22 56 89
-Encoded format:  10000001 10000100 10010110 10111000 01011001
-Bit breakdown:   [S][7bits] [S][7bits] [S][7bits] [S][7bits] [0][7bits]
-                 S = Space bit (1 if space follows, 0 for last number)
+Stored as bytes:  [1] [4] [22] [56] [89]
+Memory layout:    5 bytes per player, direct access
 ```
 
 ### 🚀 2. Segmented Parallel File Processing Algorithm
@@ -55,11 +54,12 @@ Additionally, a **segmented parallel file reading** strategy achieves true paral
 5. **Result Aggregation**: Main thread combines results from all worker threads
 
 ### 🎯 Key Advantages
-- **Ultra-Compact Memory**: Custom bit mapping achieves 5 bytes per player
+- **Ultra-Compact Memory**: Direct byte storage achieves 5 bytes per player
 - **True Parallel I/O**: Each thread has independent file access
 - **Zero Data Loss**: Careful line boundary management ensures no missed entries  
 - **Maximum Throughput**: Scales directly with storage parallelism
-- **Memory Efficient**: Each thread processes only its segment with encoded data
+- **Simple & Fast**: No complex encoding/decoding overhead
+- **Memory Efficient**: Each thread processes only its segment with optimized data
 
 ## 📈 Performance Benchmarks
 
@@ -70,11 +70,6 @@ Additionally, a **segmented parallel file reading** strategy achieves true paral
 
 ### ⚡ Performance Results
 ```
-Original: [1 4 22 56 89]
-Encoded:  10000001 10000100 10010110 10111000 01011001
-Decoded:  [1 4 22 56 89]
-Encoding test passed: true
-
 CPU cores: 12
 Reading players from file...
 Threads: 12
@@ -98,7 +93,7 @@ Counting matches Execution took 89.5442ms (89544200 ns)
 - **Memory Usage**: **47.68 MB** for 10M players
 - **Match Processing**: 89.5ms for 10M comparisons ≈ **111.7M comparisons/second**
 - **Total Throughput**: **~275ms** for complete 10M player lottery analysis
-- **Memory Efficiency**: Ultra-compact 5 bytes per player with custom bit mapping
+- **Memory Efficiency**: Ultra-compact 5 bytes per player with direct byte storage
 
 ## 🏗️ Project Structure
 
@@ -152,7 +147,7 @@ go run memory_analysis.go
 
 **Features:**
 - **Memory usage analysis**: Detailed memory calculations
-- **Bit-level breakdown**: Detailed encoding analysis  
+- **Byte-level breakdown**: Detailed storage analysis  
 - **Scale examples**: Memory usage from 1K to 100M players
 - **Efficiency metrics**: Performance characteristics
 
@@ -173,7 +168,7 @@ go run main.go test_players.txt 24       # Run analysis
 
 ### Memory Usage at Scale
 ```bash
-# Memory usage with custom bit mapping:
+# Memory usage with direct byte storage:
      1,000 players:   0.005 MB
     10,000 players:   0.048 MB
    100,000 players:   0.477 MB
@@ -206,33 +201,32 @@ go run main.go test_players.txt 12
 
 ## 🧬 Technical Implementation Details
 
-### Custom Bit Mapping Algorithm
-- **7-bit numbers**: Store values 1-90 in minimal space
-- **Space bit encoding**: 8th bit indicates formatting
+### Direct Byte Storage Algorithm
+- **Simple storage**: Store values 1-90 directly in bytes
+- **No overhead**: No bit manipulation or complex encoding
 - **Byte alignment**: Each number fits in exactly 1 byte
 - **Memory efficiency**: Ultra-compact 5 bytes per player
 
-### EncodedPlayer Structure
+### Player Structure
 ```go
-type EncodedPlayer [5]byte
+type Player [5]byte
 
-// Example encoding for [1, 4, 22, 56, 89]:
-// 10000001 10000100 10010110 10111000 01011001
-//    ↑        ↑        ↑        ↑        ↑
-//  1+space  4+space  22+space 56+space   89
+// Example storage for [1, 4, 22, 56, 89]:
+// [1] [4] [22] [56] [89]
+// Direct byte storage - no encoding needed
 ```
 
 ### Big O Complexity Analysis
 
 #### Time Complexity
 - **File Reading**: O(n) - Linear with number of players
-- **Player Encoding**: O(n) - O(1) per player × n players
+- **Player Storage**: O(n) - O(1) per player × n players
 - **Match Processing**: O(n) - Each player compared against 5 winning numbers (constant)
 - **Result Aggregation**: O(t) - Where t is number of threads (typically << n)
 - **Overall System**: O(n) - Linear scalability with player count
 
 #### Space Complexity
-- **Raw Player Data**: O(n) - 5 bytes per player with custom encoding
+- **Raw Player Data**: O(n) - 5 bytes per player with direct storage
 - **Working Memory**: O(n/t) per thread - Segmented processing
 - **Result Storage**: O(1) - Fixed-size match counters
 - **Total Memory**: O(n) - Optimal linear space usage
@@ -244,8 +238,9 @@ type EncodedPlayer [5]byte
 - **Result Merging**: O(t) - Combine results from all threads
 
 ### Performance Characteristics
-- **Encoding**: O(1) per player
-- **Decoding**: O(1) per player (only when needed for matching)
+- **Storage**: O(1) per player - direct byte assignment
+- **Access**: O(1) per player - direct byte-to-int conversion
 - **Cache Efficiency**: 8x better locality due to compact representation
 - **Memory Bandwidth**: Reduced by 87.5% compared to standard integer arrays
 - **GC Pressure**: Minimal due to compact allocations
+- **Simplicity**: No encoding/decoding overhead

@@ -15,46 +15,20 @@ import (
 
 type MatchCount map[int]int
 
-// EncodedPlayer represents a player's numbers as 5 bytes using custom bit mapping
-type EncodedPlayer [5]byte
+// Player represents a player's numbers as 5 bytes
+type Player [5]byte
 
-// encodeLine encodes a line of 5 numbers using custom bit mapping
-// Numbers 1-90 use 7 bits, with 8th bit set if space follows the number
-func encodeLine(numbers []int) EncodedPlayer {
-	var encoded EncodedPlayer
+// createPlayer creates a player from 5 numbers (1-90 each fits in a byte)
+func createPlayer(numbers []int) Player {
+	var player Player
 	for i, num := range numbers {
-		// Store the 7-bit number
-		encoded[i] = byte(num)
-		// Set the 8th bit (MSB) if this is not the last number (has space after it)
-		if i < 4 {
-			encoded[i] |= 0x80 // Set MSB to indicate space
-		}
+		player[i] = byte(num)
 	}
-	return encoded
-}
-
-// decodePlayer decodes an EncodedPlayer back to []int for matching
-func decodePlayer(encoded EncodedPlayer) []int {
-	numbers := make([]int, 5)
-	for i := 0; i < 5; i++ {
-		// Extract the 7-bit number by masking out the MSB
-		numbers[i] = int(encoded[i] & 0x7F)
-	}
-	return numbers
+	return player
 }
 
 func main() {
-	// Quick test of encoding/decoding
-	testNumbers := []int{1, 4, 22, 56, 89}
-	encoded := encodeLine(testNumbers)
-	decoded := decodePlayer(encoded)
-	
-	fmt.Printf("Original: %v\n", testNumbers)
-	fmt.Printf("Encoded:  %08b %08b %08b %08b %08b\n", 
-		encoded[0], encoded[1], encoded[2], encoded[3], encoded[4])
-	fmt.Printf("Decoded:  %v\n", decoded)
-	fmt.Println("Encoding test passed:", fmt.Sprintf("%v", testNumbers) == fmt.Sprintf("%v", decoded))
-	fmt.Println()
+
 
 	if len(os.Args) < 3 {
 		fmt.Println("Generating test file...")
@@ -142,7 +116,7 @@ func main() {
 	fmt.Println("Threads:", threads)
 	
 	start := time.Now()
-	encodedPlayers, err := readPlayersEncoded(os.Args[1], threads)
+	players, err := readPlayers(os.Args[1], threads)
 	elapsed := time.Since(start)
 	fmt.Printf("Reading players Execution took %s (%d ns)\n", elapsed, elapsed.Nanoseconds())
 	
@@ -157,7 +131,7 @@ func main() {
 	start = time.Now()
 	// Parallel match counting for maximum speed
 	fmt.Printf("Counting matches with %d threads...\n", threads)
-	result := countMatchesParallelEncoded(encodedPlayers, winning, threads)
+	result := countMatchesParallel(players, winning, threads)
 
 	// Print results
 	fmt.Println("Number Matching | Winners")
@@ -170,7 +144,7 @@ func main() {
 	fmt.Printf("Counting matches Execution took %s (%d ns)\n", elapsed, elapsed.Nanoseconds())
 }
 
-func readPlayersEncoded(path string, threads byte) ([]EncodedPlayer, error) {
+func readPlayers(path string, threads byte) ([]Player, error) {
 	// Get file size for segment calculation
 	file, err := os.Open(path)
 	if err != nil {
@@ -192,7 +166,7 @@ func readPlayersEncoded(path string, threads byte) ([]EncodedPlayer, error) {
 	}
 
 	// Channel to collect results from each thread
-	resultsChan := make(chan []EncodedPlayer, threads)
+	resultsChan := make(chan []Player, threads)
 	var wg sync.WaitGroup
 
 	optimalBufferSize := int(segmentSize) + (int(segmentSize)/2)
@@ -211,14 +185,14 @@ func readPlayersEncoded(path string, threads byte) ([]EncodedPlayer, error) {
 				endPos = fileSize // Last thread reads until end of file
 			}
 
-			encodedPlayers, err := readFileSegmentEncoded(file, int(id), startPos, endPos, optimalBufferSize)
+			players, err := readFileSegment(file, int(id), startPos, endPos, optimalBufferSize)
 			if err != nil {
 				fmt.Printf("Thread %d error: %v\n", id, err)
 				resultsChan <- nil
 				return
 			}
 			
-			resultsChan <- encodedPlayers
+			resultsChan <- players
 		}(threadID)
 	}
 
@@ -230,21 +204,21 @@ func readPlayersEncoded(path string, threads byte) ([]EncodedPlayer, error) {
 	}()
 
 	// Combine results from all threads
-	var allEncodedPlayers []EncodedPlayer
+	var allPlayers []Player
 	totalPlayers := 0
 	
 	for threadResults := range resultsChan {
 		if threadResults != nil {
-			allEncodedPlayers = append(allEncodedPlayers, threadResults...)
+			allPlayers = append(allPlayers, threadResults...)
 			totalPlayers += len(threadResults)
 		}
 	}
 
-	return allEncodedPlayers, nil
+	return allPlayers, nil
 }
 
-// readFileSegmentEncoded reads a specific segment of the file from startPos to endPos and returns encoded players
-func readFileSegmentEncoded(file *os.File, threadID int, startPos, endPos int64, optimalBufferSize int) ([]EncodedPlayer, error) {
+// readFileSegment reads a specific segment of the file from startPos to endPos and returns players
+func readFileSegment(file *os.File, threadID int, startPos, endPos int64, optimalBufferSize int) ([]Player, error) {
 	// Seek to the start position
 	_, err := file.Seek(startPos, 0)
 	if err != nil {
@@ -258,7 +232,7 @@ func readFileSegmentEncoded(file *os.File, threadID int, startPos, endPos int64,
 	buf := make([]byte, optimalBufferSize)
 	scanner.Buffer(buf, optimalBufferSize)
 
-	var encodedPlayers []EncodedPlayer
+	var players []Player
 	lineCount := 0
 
 	// Thread 0 starts from beginning, others skip first partial line
@@ -301,8 +275,8 @@ func readFileSegmentEncoded(file *os.File, threadID int, startPos, endPos int64,
 			continue
 		}
 		if len(picks) == 5 {
-			encoded := encodeLine(picks)
-			encodedPlayers = append(encodedPlayers, encoded)
+			player := createPlayer(picks)
+			players = append(players, player)
 		}
 	}
 
@@ -333,8 +307,8 @@ func readFileSegmentEncoded(file *os.File, threadID int, startPos, endPos int64,
 			if err != nil {
 				fmt.Printf("Thread %d: error parsing final line %d: %v\n", threadID, lineCount, err)
 			} else if len(picks) == 5 {
-				encoded := encodeLine(picks)
-				encodedPlayers = append(encodedPlayers, encoded)
+							player := createPlayer(picks)
+			players = append(players, player)
 			}
 		}
 	}
@@ -343,7 +317,7 @@ func readFileSegmentEncoded(file *os.File, threadID int, startPos, endPos int64,
 		return nil, fmt.Errorf("thread %d: scanner error: %v", threadID, err)
 	}
 
-	return encodedPlayers, nil
+	return players, nil
 }
 
 func nextPowerOf2(n int64) int {
@@ -365,13 +339,13 @@ func nextPowerOf2(n int64) int {
 	return power
 }
 
-// Parallel match counting for maximum performance with encoded players
-func countMatchesParallelEncoded(encodedPlayers []EncodedPlayer, winning []int, threads byte) MatchCount {
-	if len(encodedPlayers) == 0 {
+// Parallel match counting for maximum performance
+func countMatchesParallel(players []Player, winning []int, threads byte) MatchCount {
+	if len(players) == 0 {
 		return MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
 	}
 
-	totalPlayers := len(encodedPlayers)
+	totalPlayers := len(players)
 	chunkSize := totalPlayers / int(threads)
 	if chunkSize == 0 {
 		chunkSize = 1
@@ -391,24 +365,27 @@ func countMatchesParallelEncoded(encodedPlayers []EncodedPlayer, winning []int, 
 		}
 
 		wg.Add(1)
-		go func(encodedPlayerChunk []EncodedPlayer) {
+		go func(playerChunk []Player) {
 			defer wg.Done()
 			localResult := MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
 			var set map[int]bool
 			var match int
 			var p, n int
 
-			for _, encodedPlayer := range encodedPlayerChunk {
-				// Decode the player for matching
-				player := decodePlayer(encodedPlayer)
-				match = countMatches(player, winning, set, match, n, p)
+			for _, player := range playerChunk {
+				// Convert player bytes to int slice for matching
+				numbers := make([]int, 5)
+				for i := 0; i < 5; i++ {
+					numbers[i] = int(player[i])
+				}
+				match = countMatches(numbers, winning, set, match, n, p)
 				if match >= 2 && match <= 5 {
 					localResult[match]++
 				}
 			}
 
 			resultsChan <- localResult
-		}(encodedPlayers[start:end])
+		}(players[start:end])
 	}
 
 	go func() {
