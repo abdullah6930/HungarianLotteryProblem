@@ -60,7 +60,7 @@ func main() {
 		fmt.Println("Generating test file...")
 		// Append 5 random numbers per line between 1 and 90 to test_players.txt until 1 million lines are reached
 		fileName := os.Args[1]
-		lineCount := 1000000
+		lineCount := 10000000
 		numsPerLine := 5
 		min, max := 1, 90
 

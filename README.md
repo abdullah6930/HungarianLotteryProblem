@@ -78,26 +78,26 @@ Encoding test passed: true
 CPU cores: 12
 Reading players from file...
 Threads: 12
-Reading players Execution took 246.0614ms (246061400 ns)
+Reading players Execution took 186.0733ms (186073300 ns)
 
 Enter 5 winning numbers (space-separated): 1 2 3 4 5
 Counting matches with 12 threads...
 
 Number Matching | Winners
 ----------------|--------
-5               | 1
-4               | 380
-3               | 11911
-2               | 203976
+5               | 4
+4               | 306
+3               | 9132
+2               | 157194
 
-Counting matches Execution took 124.0873ms (124087300 ns)
+Counting matches Execution took 89.5442ms (89544200 ns)
 ```
 
 ### 🎯 Key Metrics
-- **File Reading**: 246ms for 10M entries ≈ **40.6M entries/second**
+- **File Reading**: 186ms for 10M entries ≈ **53.8M entries/second**
 - **Memory Usage**: **47.68 MB** for 10M players
-- **Match Processing**: 124ms for 10M comparisons ≈ **80.6M comparisons/second**
-- **Total Throughput**: **~370ms** for complete 10M player lottery analysis
+- **Match Processing**: 89.5ms for 10M comparisons ≈ **111.7M comparisons/second**
+- **Total Throughput**: **~275ms** for complete 10M player lottery analysis
 - **Memory Efficiency**: Ultra-compact 5 bytes per player with custom bit mapping
 
 ## 🏗️ Project Structure
@@ -114,24 +114,31 @@ HungarianLotteryProblem/
 
 ### Quick Start
 ```bash
-# Generate test data (10M players)
+# Step 1: Generate test data (10M players) - run this first
 go run main.go test_players.txt
 
-# Run with optimal threading (match your CPU cores)
+# Step 2: Run lottery analysis with optimal threading (match your CPU cores)
 go run main.go test_players.txt 12
 
-# Analyze memory optimization results
+# Step 3: Analyze memory optimization results
 go run memory_analysis.go
 ```
 
 ### Command Line Usage
+
+**Generation Mode** (creates test data):
+```bash
+go run main.go <filename>
+```
+
+**Analysis Mode** (runs lottery analysis):
 ```bash
 go run main.go <input_file_path> <number_of_threads>
 ```
 
 **Parameters:**
-- `input_file_path`: Path to the file containing player entries (or new filename to generate test data)
-- `number_of_threads`: Number of parallel threads for segmented file processing
+- `input_file_path`: Path to the file containing player entries
+- `number_of_threads`: Number of parallel threads for segmented file processing (omit to generate test data)
 
 **Threading Recommendations:**
 - Use your CPU's thread count for optimal performance (e.g., 12 threads for 6-core/12-thread CPU)
@@ -151,14 +158,17 @@ go run memory_analysis.go
 
 ### Performance Optimization Tips
 ```bash
-# For AMD Ryzen 5 5600G (6 cores, 12 threads) - optimal setting:
-go run main.go test_players.txt 12
+# For AMD Ryzen 5 5600G (6 cores, 12 threads):
+go run main.go test_players.txt          # Generate data first
+go run main.go test_players.txt 12       # Run analysis
 
 # For Intel i7-8700K (6 cores, 12 threads):
-go run main.go test_players.txt 12
+go run main.go test_players.txt          # Generate data first  
+go run main.go test_players.txt 12       # Run analysis
 
 # For AMD Ryzen 9 5900X (12 cores, 24 threads):
-go run main.go test_players.txt 24
+go run main.go test_players.txt          # Generate data first
+go run main.go test_players.txt 24       # Run analysis
 ```
 
 ### Memory Usage at Scale
@@ -183,11 +193,16 @@ Each line represents one player, with exactly 5 distinct numbers between 1 and 9
 ```
 
 ### Auto-Generation Feature
-If the specified file doesn't exist, the program automatically generates 10,000,000 test players:
+To generate test data, run the program with only the filename (no thread count):
 ```bash
-# This will create test_players.txt with 10M random entries
+# Step 1: Generate test_players.txt with 10M random entries
+go run main.go test_players.txt
+
+# Step 2: Run analysis after file is generated
 go run main.go test_players.txt 12
 ```
+
+**Note**: The program detects when no thread count is provided and automatically generates 10,000,000 test players.
 
 ## 🧬 Technical Implementation Details
 
