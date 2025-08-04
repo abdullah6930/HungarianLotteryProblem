@@ -137,7 +137,7 @@ func main() {
 	// Print results
 	fmt.Println("Number Matching | Winners")
 	fmt.Println("----------------|--------")
-	for i := 5; i >= 2; i-- {
+	for i := 5; i >= 0; i-- {
 		fmt.Printf("%-16d| %d\n", i, result[i])
 	}
 
@@ -169,8 +169,6 @@ func readPlayers(path string, threads byte) ([]Player, error) {
 		threads = 1
 	}
 	
-	fmt.Printf("Lines per thread: %d\n", linesPerThread)
-
 	// Channel to collect results from each thread
 	resultsChan := make(chan []Player, threads)
 	var wg sync.WaitGroup
@@ -227,7 +225,7 @@ func readPlayers(path string, threads byte) ([]Player, error) {
 // Parallel match counting for maximum performance
 func countMatchesParallel(players []Player, winning []int, threads byte) MatchCount {
 	if len(players) == 0 {
-		return MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
+		return MatchCount{0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
 	}
 
 	totalPlayers := len(players)
@@ -252,7 +250,7 @@ func countMatchesParallel(players []Player, winning []int, threads byte) MatchCo
 		wg.Add(1)
 		go func(playerChunk []Player) {
 			defer wg.Done()
-			localResult := MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
+			localResult := MatchCount{0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
 			var set map[int]bool
 			var match int
 			var p, n int
@@ -264,7 +262,7 @@ func countMatchesParallel(players []Player, winning []int, threads byte) MatchCo
 					numbers[i] = int(player[i])
 				}
 				match = countMatches(numbers, winning, set, match, n, p)
-				if match >= 2 && match <= 5 {
+				if match >= 0 && match <= 5 {
 					localResult[match]++
 				}
 			}
@@ -278,7 +276,7 @@ func countMatchesParallel(players []Player, winning []int, threads byte) MatchCo
 		close(resultsChan)
 	}()
 
-	finalResult := MatchCount{2: 0, 3: 0, 4: 0, 5: 0}
+	finalResult := MatchCount{0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
 	for localResult := range resultsChan {
 		for k, v := range localResult {
 			finalResult[k] += v
