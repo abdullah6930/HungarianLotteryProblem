@@ -117,6 +117,7 @@ func main() {
 	
 	start := time.Now()
 	players, err := readPlayers(os.Args[1], threads)
+	fmt.Println("Players read:", len(players))
 	elapsed := time.Since(start)
 	fmt.Printf("Reading players Execution took %s (%d ns)\n", elapsed, elapsed.Nanoseconds())
 	
@@ -145,47 +146,52 @@ func main() {
 }
 
 func readPlayers(path string, threads byte) ([]Player, error) {
-	// Get file size for segment calculation
+	// First, count total lines in the file
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	fileInfo, err := file.Stat()
+	
+	fmt.Println("Counting total lines...")
+	totalLines, err := countLines(file)
 	if err != nil {
 		file.Close()
 		return nil, err
 	}
-	fileSize := fileInfo.Size()
+	file.Close()
 	
-
-	// Calculate segment size per thread
-	segmentSize := fileSize / int64(threads)
-	if segmentSize == 0 {
-		segmentSize = fileSize
+	fmt.Printf("Total lines in file: %d\n", totalLines)
+	
+	// Calculate lines per thread
+	linesPerThread := totalLines / int(threads)
+	if linesPerThread == 0 {
+		linesPerThread = totalLines
 		threads = 1
 	}
+	
+	fmt.Printf("Lines per thread: %d\n", linesPerThread)
 
 	// Channel to collect results from each thread
 	resultsChan := make(chan []Player, threads)
 	var wg sync.WaitGroup
 
-	optimalBufferSize := int(segmentSize) + (int(segmentSize)/2)
-	optimalBufferSize = nextPowerOf2(int64(optimalBufferSize))
-
-	// Launch reader threads - each reads its own file segment
+	// Launch reader threads - each reads its assigned line range
 	for threadID := byte(0); threadID < threads; threadID++ {
 		wg.Add(1)
 		go func(id byte) {
 			defer wg.Done()
 			
-			// Calculate start and end positions for this thread
-			startPos := int64(id) * segmentSize
-			endPos := startPos + segmentSize
+			// Calculate start and end line numbers for this thread
+			startLine := int(id) * linesPerThread
+			endLine := startLine + linesPerThread
 			if id == threads - 1 {
-				endPos = fileSize // Last thread reads until end of file
+				endLine = totalLines // Last thread reads until end of file
 			}
+			
+			fmt.Printf("Thread %d: lines %d to %d\n", id, startLine, endLine-1)
 
-			players, err := readFileSegment(file, int(id), startPos, endPos, optimalBufferSize)
+			players, err := readFileLines(path, startLine, endLine)
+			fmt.Println("Thread", id, "players:", len(players))
 			if err != nil {
 				fmt.Printf("Thread %d error: %v\n", id, err)
 				resultsChan <- nil
@@ -200,7 +206,6 @@ func readPlayers(path string, threads byte) ([]Player, error) {
 	go func() {
 		wg.Wait()
 		close(resultsChan)
-		file.Close()
 	}()
 
 	// Combine results from all threads
@@ -217,127 +222,7 @@ func readPlayers(path string, threads byte) ([]Player, error) {
 	return allPlayers, nil
 }
 
-// readFileSegment reads a specific segment of the file from startPos to endPos and returns players
-func readFileSegment(file *os.File, threadID int, startPos, endPos int64, optimalBufferSize int) ([]Player, error) {
-	// Seek to the start position
-	_, err := file.Seek(startPos, 0)
-	if err != nil {
-		return nil, fmt.Errorf("thread %d: failed to seek to position %d: %v", threadID, startPos, err)
-	}
 
-	// Create a limited reader that stops at endPos
-	limitedReader := &io.LimitedReader{R: file, N: endPos - startPos}
-	scanner := bufio.NewScanner(limitedReader)
-
-	buf := make([]byte, optimalBufferSize)
-	scanner.Buffer(buf, optimalBufferSize)
-
-	var players []Player
-	lineCount := 0
-
-	// Thread 0 starts from beginning, others skip first partial line
-	if threadID > 0 {
-		// Skip the first (potentially partial) line
-		if scanner.Scan() {
-			// This line is skipped as it might be partial
-			lineCount++
-		}
-	}
-
-	nums := make([]string, 5)
-	picks := make([]int, 0, 5)
-	var n int
-	var line string
-
-	// Read and process complete lines within our segment
-	for scanner.Scan() {
-		line = scanner.Text()
-		lineCount++
-
-		nums = nums[:0]
-		nums = strings.Fields(line)
-		if len(nums) != 5 {
-			nums = nil
-		}
-		
-		picks = picks[:0]
-		for _, s := range nums {
-			n, err = strconv.Atoi(s)
-			if err != nil {
-				return nil, fmt.Errorf("invalid number: %v", s)
-			}
-			picks = append(picks, n)
-		}
-
-		if err != nil {
-			// Log error but continue processing
-			fmt.Printf("Thread %d: error parsing line %d: %v\n", threadID, lineCount, err)
-			continue
-		}
-		if len(picks) == 5 {
-			player := createPlayer(picks)
-			players = append(players, player)
-		}
-	}
-
-
-	// Check if we need to read one more complete line (if we ended mid-line)
-	if limitedReader.N == 0 {
-		// We've reached our limit, but might be in the middle of a line
-		// Read until the end of the current line
-		originalScanner := bufio.NewScanner(file)
-		if originalScanner.Scan() {
-			line = originalScanner.Text()
-			lineCount++
-
-			nums = strings.Fields(line)
-			if len(nums) != 5 {
-				nums = nil
-			}
-			
-			picks = picks[:0]
-			for _, s := range nums {
-				n, err = strconv.Atoi(s)
-				if err != nil {
-					return nil, fmt.Errorf("invalid number: %v", s)
-				}
-				picks = append(picks, n)
-			}
-
-			if err != nil {
-				fmt.Printf("Thread %d: error parsing final line %d: %v\n", threadID, lineCount, err)
-			} else if len(picks) == 5 {
-							player := createPlayer(picks)
-			players = append(players, player)
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("thread %d: scanner error: %v", threadID, err)
-	}
-
-	return players, nil
-}
-
-func nextPowerOf2(n int64) int {
-	if n <= 0 {
-		return 1
-	}
-	if n == 1 {
-		return 1
-	}
-	
-	// Find the highest bit set
-	power := 1
-	for power < int(n) {
-		power *= 2
-		if power > 1048576 { // Cap at 1MB
-			return 1048576
-		}
-	}
-	return power
-}
 
 // Parallel match counting for maximum performance
 func countMatchesParallel(players []Player, winning []int, threads byte) MatchCount {
@@ -460,4 +345,82 @@ func getLineCount(file *os.File) (int, error) {
 	}
 
 	return lineCount, nil
+}
+
+// countLines efficiently counts total lines in a file
+func countLines(file *os.File) (int, error) {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return 0, err
+	}
+
+	scanner := bufio.NewScanner(file)
+	lineCount := 0
+
+	for scanner.Scan() {
+		lineCount++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+
+	return lineCount, nil
+}
+
+// readFileLines reads specific line ranges from a file (startLine inclusive, endLine exclusive)
+func readFileLines(path string, startLine, endLine int) ([]Player, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var players []Player
+	currentLine := 0
+
+	// Skip lines before our start
+	for currentLine < startLine && scanner.Scan() {
+		currentLine++
+	}
+
+	// Process our assigned lines
+	nums := make([]string, 0, 5)
+	picks := make([]int, 0, 5)
+	
+	for currentLine < endLine && scanner.Scan() {
+		line := scanner.Text()
+		currentLine++
+
+		nums = nums[:0]
+		nums = strings.Fields(line)
+		if len(nums) != 5 {
+			continue // Skip malformed lines
+		}
+		
+		picks = picks[:0]
+		var parseErr error
+		for _, s := range nums {
+			n, parseErr := strconv.Atoi(s)
+			if parseErr != nil {
+				break
+			}
+			picks = append(picks, n)
+		}
+
+		if parseErr != nil {
+			continue // Skip lines with parse errors
+		}
+		
+		if len(picks) == 5 {
+			player := createPlayer(picks)
+			players = append(players, player)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return players, nil
 }

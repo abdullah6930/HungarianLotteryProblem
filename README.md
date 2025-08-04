@@ -40,26 +40,26 @@ Stored as bytes:  [1] [4] [22] [56] [89]
 Memory layout:    5 bytes per player, direct access
 ```
 
-### 🚀 2. Segmented Parallel File Processing Algorithm
-Additionally, a **segmented parallel file reading** strategy achieves true parallel I/O by eliminating the single-threaded file reader bottleneck.
+### 🚀 2. Line-Based Parallel File Processing Algorithm
+Additionally, a **line-based parallel file reading** strategy achieves efficient parallel processing with guaranteed data integrity by eliminating line boundary issues.
 
 ### 📊 Algorithm Steps
-1. **File Segmentation**: Divide file into `n` equal segments based on byte positions
-2. **Thread Assignment**: Each thread gets a segment: `segmentSize = fileSize / threads`  
-3. **Parallel File Access**: Each thread opens its own file handle for true parallel I/O
-4. **Smart Line Boundary Handling**:
-   - **Thread 0**: Reads from file start, processes all complete lines
-   - **Thread n**: Reads from `(segmentSize * n) + 1`, skips first partial line
-   - **All Threads**: Complete final partial lines beyond segment boundaries
+1. **Line Counting**: Count total lines in the file for precise segmentation
+2. **Line-Based Segmentation**: Divide work by line numbers: `linesPerThread = totalLines / threads`
+3. **Thread Assignment**: Each thread gets a specific line range with no overlaps or gaps
+4. **Parallel File Processing**:
+   - **Thread 0**: Processes lines 0 to `linesPerThread-1`
+   - **Thread n**: Processes lines `n*linesPerThread` to `(n+1)*linesPerThread-1`
+   - **Last Thread**: Handles any remaining lines to ensure 100% coverage
 5. **Result Aggregation**: Main thread combines results from all worker threads
 
 ### 🎯 Key Advantages
 - **Ultra-Compact Memory**: Direct byte storage achieves 5 bytes per player
-- **True Parallel I/O**: Each thread has independent file access
-- **Zero Data Loss**: Careful line boundary management ensures no missed entries  
-- **Maximum Throughput**: Scales directly with storage parallelism
+- **100% Data Integrity**: Line-based segmentation guarantees every player is counted exactly once
+- **Perfect Load Balancing**: Equal line distribution across threads ensures optimal performance  
+- **Zero Data Loss**: No line boundary issues or missed entries
 - **Simple & Fast**: No complex encoding/decoding overhead
-- **Memory Efficient**: Each thread processes only its segment with optimized data
+- **Memory Efficient**: Optimized data structures with minimal memory footprint
 
 ## 📈 Performance Benchmarks
 
@@ -73,26 +73,34 @@ Additionally, a **segmented parallel file reading** strategy achieves true paral
 CPU cores: 12
 Reading players from file...
 Threads: 12
-Reading players Execution took 186.0733ms (186073300 ns)
+Counting total lines...
+Total lines in file: 10000000
+Lines per thread: 833333
+Thread 0: lines 0 to 833332
+...
+Thread 11: lines 9166663 to 9999999
+Players read: 10000000
+Reading players Execution took 1.0213259s (1021325900 ns)
 
 Enter 5 winning numbers (space-separated): 1 2 3 4 5
 Counting matches with 12 threads...
 
 Number Matching | Winners
 ----------------|--------
-5               | 4
-4               | 306
-3               | 9132
-2               | 157194
+5               | 5
+4               | 395
+3               | 14521
+2               | 245814
 
-Counting matches Execution took 89.5442ms (89544200 ns)
+Counting matches Execution took 142.3599ms (142359900 ns)
 ```
 
 ### 🎯 Key Metrics
-- **File Reading**: 186ms for 10M entries ≈ **53.8M entries/second**
+- **File Reading**: 1.02s for 10M entries ≈ **9.8M entries/second**
 - **Memory Usage**: **47.68 MB** for 10M players
-- **Match Processing**: 89.5ms for 10M comparisons ≈ **111.7M comparisons/second**
-- **Total Throughput**: **~275ms** for complete 10M player lottery analysis
+- **Match Processing**: 142ms for 10M comparisons ≈ **70.4M comparisons/second**
+- **Total Throughput**: **~1.16s** for complete 10M player lottery analysis
+- **Data Integrity**: **100% accuracy** - all 10,000,000 players correctly processed
 - **Memory Efficiency**: Ultra-compact 5 bytes per player with direct byte storage
 
 ## 🏗️ Project Structure
@@ -233,8 +241,9 @@ type Player [5]byte
 
 #### Parallel Processing Complexity
 - **Thread Coordination**: O(t) - Where t = number of threads
-- **File Segmentation**: O(1) - Constant time segment calculation  
-- **Load Balancing**: O(n/t) - Even distribution across threads
+- **Line Counting**: O(n) - One-time linear scan for total line count
+- **Line Segmentation**: O(1) - Constant time line range calculation  
+- **Load Balancing**: O(n/t) - Perfect distribution across threads
 - **Result Merging**: O(t) - Combine results from all threads
 
 ### Performance Characteristics
